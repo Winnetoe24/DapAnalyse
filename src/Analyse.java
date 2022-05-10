@@ -2,11 +2,20 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.sql.SQLOutput;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Consumer;
 
 public class Analyse {
+
+    private static Map<List<int[][]>, String> runListToName = new HashMap<>();
+    /**
+     * Map<Programm,Map<Strategie, Map<run, Duration>>>
+     */
+    private static Map<String, Map<String, Map<Integer, Duration>>> zeiten = new HashMap<>();
 
     public static void main(String[] args) throws Exception {
         //args lesen
@@ -62,22 +71,23 @@ public class Analyse {
 
         int[] argumenteArr = argumente.stream().mapToInt(Integer::intValue).toArray();
 
-        Set<AnalyseStrategie> analyseStrategien = new HashSet<AnalyseStrategie>();
+        Map<AnalyseStrategie, String> analyseStrategien = new HashMap<>();
 
         for (String strategiePfad : strategiePfade) {
             Class<?> aClass = ClassLoader.getSystemClassLoader().loadClass(strategiePfad);
             Object noArgInstance = getNoArgInstance(aClass);
             if (noArgInstance instanceof AnalyseStrategie) {
-                analyseStrategien.add((AnalyseStrategie) noArgInstance);
+                analyseStrategien.put((AnalyseStrategie) noArgInstance, strategiePfad);
                 System.out.println("Strategie hinzugefügt:" + strategiePfad);
             }
         }
 
         System.out.println("Generiere Run Sets");
-        Set<Set<int[][]>> runSets = new HashSet<>();
-        for (AnalyseStrategie analyseStrategie : analyseStrategien) {
-            Set<int[][]> supply = analyseStrategie.supply(data, argumenteArr);
+        Set<List<int[][]>> runSets = new HashSet<>();
+        for (AnalyseStrategie analyseStrategie : analyseStrategien.keySet()) {
+            List<int[][]> supply = analyseStrategie.supply(data, argumenteArr);
             runSets.add(supply);
+            runListToName.put(supply, analyseStrategien.get(analyseStrategie));
         }
 
 
@@ -88,30 +98,66 @@ public class Analyse {
                 Object o = getNoArgInstance(aClass);
                 if (o instanceof Analysierbar) {
                     Analysierbar analysierbar = (Analysierbar) o;
-                    System.out.println();
-                    System.out.println("Führe " + klassenPfad + " aus");
-                    for (Set<int[][]> runSet : runSets) {
-                        System.out.println();
-                        System.out.println("Set:" + runSet);
-                        for (int[][] ints : runSet) {
-                            System.out.println();
-                            System.out.println("Run:" + ints);
-                            System.out.println();
-                            Instant now = Instant.now();
-                            analysierbar.run(ints[0], ints[1]);
-                            Instant now2 = Instant.now();
-                            System.out.println();
-                            System.out.println("Duration: " + Duration.between(now, now2).toMillis() + " ms");
-                            System.out.println();
+                    runAnalyse(runSets, klassenPfad, ints -> analysierbar.run(ints[0], ints[1]));
+                } else {
+                    Method method = aClass.getMethod("run", int[].class, int[].class);
+                    runAnalyse(runSets, klassenPfad, ints -> {
+                        try {
+                            method.invoke(o, ints[0], ints[1]);
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        } catch (InvocationTargetException e) {
+                            e.printStackTrace();
                         }
-                    }
+                    });
                 }
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             }
         }
 
+        standardAusgabe();
 
+    }
+
+    public static void standardAusgabe() {
+        System.out.println("Ausgabe:");
+        zeiten.forEach((s, stringMapMap) -> {
+            System.out.println("Daten des Programms:"+s);
+            stringMapMap.forEach((s1, integerDurationMap) -> {
+                System.out.println("Strategie "+ s1+":");
+                integerDurationMap.forEach((integer, duration) -> {
+                    System.out.println("Run "+integer+": "+duration.toMillis()+" ms");
+                });
+            });
+        });
+    }
+
+    private static void runAnalyse(Set<List<int[][]>> runSets, String klassenPfad, Consumer<int[][]> consumer) {
+        System.out.println();
+        System.out.println("Führe " + klassenPfad + " aus");
+        for (List<int[][]> runSet : runSets) {
+            System.out.println();
+            String name = runListToName.get(runSet);
+            System.out.println("Set:" + name);
+            for (int i = 0; i < runSet.size(); i++) {
+                int[][] ints = runSet.get(i);
+                System.out.println();
+                System.out.println("Run:" + i);
+                System.out.println();
+                Instant now = Instant.now();
+                consumer.accept(ints);
+                Instant now2 = Instant.now();
+                System.out.println();
+                Duration between = Duration.between(now, now2);
+                zeiten.putIfAbsent(klassenPfad, new HashMap<>());
+                Map<String, Map<Integer, Duration>> stringMapMap = zeiten.get(klassenPfad);
+                stringMapMap.putIfAbsent(name, new HashMap<>());
+                stringMapMap.get(name).put(i, between);
+                System.out.println("Duration: " + between.toMillis() + " ms");
+                System.out.println();
+            }
+        }
     }
 
     public static Object getNoArgInstance(Class<?> klasse) {
