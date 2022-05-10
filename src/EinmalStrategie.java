@@ -1,11 +1,11 @@
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
-public class EinmalStrategie implements AnalyseStrategie{
+public class EinmalStrategie implements AnalyseStrategie {
     @Override
-    public Set<int[][]> supply(int[] data, int[] arg) {
-        HashSet<int[][]> set = new HashSet<>();
-        set.add(new int[][]{data,arg});
-        return set;
+    public List<int[][]> supply(int[] data, int[] arg) {
+        List<int[][]> list = new ArrayList<>();
+        list.add(new int[][]{data, arg});
+        return list;
     }
 }

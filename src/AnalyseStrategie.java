@@ -1,5 +1,5 @@
-import java.util.Set;
+import java.util.List;
 
 public interface AnalyseStrategie {
-    Set<int[][]> supply(int[] data, int[] k);
+    List<int[][]> supply(int[] data, int[] k);
 }
