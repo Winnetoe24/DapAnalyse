@@ -3,11 +3,11 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.sql.SQLOutput;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class Analyse {
 
@@ -22,6 +22,7 @@ public class Analyse {
         List<Integer> argumente = new ArrayList<>();
         Set<String> strategiePfade = new HashSet<>();
         Set<String> klassenPfade = new HashSet<>();
+        boolean percent = false;
         int n = 0;
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -53,6 +54,10 @@ public class Analyse {
             }
             if (arg.startsWith("-strg=") && arg.length() > 6) {
                 strategiePfade.add(arg.substring(6));
+                continue;
+            }
+            if (arg.equalsIgnoreCase("-percent")){
+                percent = true;
                 continue;
             }
             System.err.println("Argument konnte nicht gelesen werden");
@@ -117,17 +122,87 @@ public class Analyse {
         }
 
         standardAusgabe();
+        diagrammAusgabe(percent);
+    }
 
+    public static void diagrammAusgabe(boolean percentAusgabe) {
+        zeiten.forEach((s, stringMapMap) -> {
+            System.out.println("Daten des Programms: " + s);
+            stringMapMap.forEach((s1, integerDurationMap) -> {
+                List<Integer> integers = new ArrayList<>(integerDurationMap.keySet());
+                StringBuilder line = new StringBuilder();
+                for (int i = 0; i < integers.size(); i++) {
+                    line.append("-");
+                }
+                System.out.println(line);
+                System.out.println("Diagramm von: "+s1);
+                List<Long> collect = integerDurationMap.values().stream()
+                        .map(Duration::toMillis).collect(Collectors.toList());
+                long min = getMin(collect);
+                System.out.println("Minimaler Wert:"+min);
+                long max = getMax(collect);
+                System.out.println("Maximaler Wert:"+max);
+                max -= min;
+                int[] points = new int[integers.size()];
+                for (int i = 0; i < points.length; i++) {
+                    Integer integer = integers.get(i);
+                    long value = collect.get(i);
+                    value -= min;
+                    double percent = (value + 0d) / max;
+                    if (percentAusgabe) {
+                        System.out.println("Prozente:");
+                        System.out.println(integer.intValue() + ":" + percent);
+                    }
+                    percent *= 10d;
+                    points[i] = (int) percent;
+                }
+
+                for (int i = 9; i >= 0; i--) {
+                    StringBuilder bob = new StringBuilder();
+                    for (int point : points) {
+                        if (point == i || i == 9 && point > 9) {
+                            bob.append('*');
+                        } else {
+                            bob.append(' ');
+                        }
+                    }
+                    System.out.println(bob);
+                }
+                System.out.println(line);
+            });
+        });
+        String[] diagramm = new String[10];
+
+    }
+
+    /**
+     * Bestimmt das kleinste Element des Arrays.
+     *
+     * @param data Ein Array der mindestens 1 Element enthält.
+     * @return das kleinste Element im Array
+     */
+    public static long getMin(List<Long> data) {
+        return data.stream().min(Comparator.naturalOrder()).orElse(0L);
+    }
+
+    /**
+     * Bestimmt das größte Element des Arrays.
+     *
+     * @param data Ein Array der mindestens 1 Element enthält.
+     * @return das größte Element des Arrays.
+     */
+    public static long getMax(List<Long> data) {
+        return data.stream().max(Comparator.naturalOrder()).get();
     }
 
     public static void standardAusgabe() {
         System.out.println("Ausgabe:");
         zeiten.forEach((s, stringMapMap) -> {
-            System.out.println("Daten des Programms:"+s);
+            System.out.println("Daten des Programms:" + s);
             stringMapMap.forEach((s1, integerDurationMap) -> {
-                System.out.println("Strategie "+ s1+":");
+                System.out.println("Strategie " + s1 + ":");
                 integerDurationMap.forEach((integer, duration) -> {
-                    System.out.println("Run "+integer+": "+duration.toMillis()+" ms");
+                    System.out.println("Run " + integer + ": " + duration.toMillis() + " ms");
                 });
             });
         });
@@ -144,6 +219,7 @@ public class Analyse {
                 int[][] ints = runSet.get(i);
                 System.out.println();
                 System.out.println("Run:" + i);
+                System.out.println("Length: "+ints[0].length);
                 System.out.println();
                 Instant now = Instant.now();
                 consumer.accept(ints);
